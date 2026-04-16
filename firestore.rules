@@ -1,0 +1,151 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId
+    // Fields:
+    //   - id: string (required, matches userId)
+    //   - name: string (required, 1-100 chars)
+    //   - status: string (required, 'online' | 'offline')
+    //   - lastSeen: timestamp (required)
+    //
+    // Collection: sessions
+    // Document ID: 'main'
+    // Fields:
+    //   - timeLeft: number (required, >= 0)
+    //   - isRunning: bool (required)
+    //   - mode: string (required, 'study' | 'break')
+    //   - lastUpdated: timestamp (required)
+    //
+    // Collection: messages
+    // Document ID: auto-generated
+    // Fields:
+    //   - senderId: string (required, matches auth.uid)
+    //   - senderName: string (required, 1-100 chars)
+    //   - text: string (required, 1-2000 chars)
+    //   - timestamp: timestamp (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "kj1201577@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidString(field, min, max) {
+      return request.resource.data[field] is string && 
+             request.resource.data[field].size() >= min && 
+             request.resource.data[field].size() <= max;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['id', 'name', 'status', 'lastSeen']) &&
+             data.id == request.auth.uid &&
+             isValidString('name', 1, 100) &&
+             data.status in ['online', 'offline'] &&
+             data.lastSeen is timestamp &&
+             (!('nudgeCount' in data) || data.nudgeCount is number) &&
+             (!('sessionsCompleted' in data) || data.sessionsCompleted is number) &&
+             (!('completedDays' in data) || data.completedDays is list) &&
+             (!('totalScore' in data) || data.totalScore is number) &&
+             (!('mood' in data) || data.mood is string) &&
+             (!('weeklySessions' in data) || data.weeklySessions is number);
+    }
+
+    function isValidTask(data) {
+      return hasRequiredFields(['text', 'completed', 'userId', 'timestamp']) &&
+             isValidString('text', 1, 200) &&
+             data.completed is bool &&
+             data.userId == request.auth.uid &&
+             data.timestamp is timestamp;
+    }
+
+    function isValidSession(data) {
+      return hasRequiredFields(['timeLeft', 'isRunning', 'mode', 'lastUpdated']) &&
+             data.timeLeft is number && data.timeLeft >= 0 &&
+             data.isRunning is bool &&
+             data.mode in ['study', 'break'] &&
+             data.lastUpdated is timestamp;
+    }
+
+    function isValidMessage(data) {
+      return hasRequiredFields(['senderId', 'senderName', 'text', 'timestamp']) &&
+             data.senderId == request.auth.uid &&
+             isValidString('senderName', 1, 100) &&
+             isValidString('text', 1, 2000) &&
+             data.timestamp is timestamp;
+    }
+
+    function isValidChallenge(data) {
+      return hasRequiredFields(['id', 'title', 'acceptedBy', 'completedBy', 'date']) &&
+             isValidString('title', 1, 200) &&
+             data.acceptedBy is list &&
+             data.completedBy is list &&
+             data.date is string &&
+             (!('streak' in data) || data.streak is number);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isAuthenticated() && (isOwner(userId) || isAdmin() || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nudgeCount']))) && isValidUser(request.resource.data);
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidTask(request.resource.data);
+      allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isValidSession(request.resource.data);
+    }
+
+    match /messages/{messageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidMessage(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /challenges/{challengeId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isValidChallenge(request.resource.data);
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

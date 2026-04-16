@@ -1,0 +1,96 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents a user in the study app.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "type": "string", "enum": ["online", "offline"] },
+        "lastSeen": { "type": "string", "format": "date-time" },
+        "nudgeCount": { "type": "number" },
+        "sessionsCompleted": { "type": "number" },
+        "completedDays": { "type": "array", "items": { "type": "string" } },
+        "totalScore": { "type": "number" },
+        "mood": { "type": "string" },
+        "weeklySessions": { "type": "number" }
+      },
+      "required": ["id", "name", "status"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "A study goal.",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "userId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["text", "completed", "userId", "timestamp"]
+    },
+    "Session": {
+      "title": "Session",
+      "description": "The shared study session state.",
+      "type": "object",
+      "properties": {
+        "timeLeft": { "type": "number" },
+        "isRunning": { "type": "boolean" },
+        "mode": { "type": "string", "enum": ["study", "break"] },
+        "lastUpdated": { "type": "string", "format": "date-time" }
+      },
+      "required": ["timeLeft", "isRunning", "mode"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "A chat message.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "senderName", "text", "timestamp"]
+    },
+    "Challenge": {
+      "title": "Challenge",
+      "description": "A shared study challenge for the couple.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "acceptedBy": { "type": "array", "items": { "type": "string" } },
+        "completedBy": { "type": "array", "items": { "type": "string" } },
+        "date": { "type": "string", "format": "date" },
+        "streak": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "acceptedBy", "completedBy", "date"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "User presence and profile."
+    },
+    "/sessions/main": {
+      "schema": { "$ref": "Session" },
+      "description": "The global study timer state."
+    },
+    "/messages/{messageId}": {
+      "schema": { "$ref": "Message" },
+      "description": "Chat messages collection."
+    },
+    "/tasks/{taskId}": {
+      "schema": { "$ref": "Task" },
+      "description": "Shared study goals."
+    },
+    "/challenges/{challengeId}": {
+      "schema": { "$ref": "Challenge" },
+      "description": "Shared daily challenges."
+    }
+  }
+}
